@@ -256,38 +256,74 @@ export async function onRequest(context) {
         return `/proxy/${encodeURIComponent(targetUrl)}`;
     }
 
-    // 获取远程内容及其类型
-    async function fetchContentWithType(targetUrl) {
-        const headers = new Headers({
-            'User-Agent': getRandomUserAgent(),
-            'Accept': '*/*',
-            // 尝试传递一些原始请求的头信息
-            'Accept-Language': request.headers.get('Accept-Language') || 'zh-CN,zh;q=0.9,en;q=0.8',
-            // 尝试设置 Referer 为目标网站的域名，或者传递原始 Referer
-            'Referer': request.headers.get('Referer') || new URL(targetUrl).origin
-        });
-
+    // 判断是否为图片请求（用于二进制获取与豆瓣防盗链处理）
+    function isImageRequest(targetUrl) {
         try {
-            // 直接请求目标 URL
-            logDebug(`开始直接请求: ${targetUrl}`);
-            // Cloudflare Functions 的 fetch 默认支持重定向
+            const u = new URL(targetUrl);
+            if (/\.(jpg|jpeg|png|gif|webp|bmp|svg|ico|avif)(\?|$)/i.test(u.pathname)) return true;
+            if (/^img\d*\.doubanio\.com$/i.test(u.hostname) || /^img\d*\.douban\.com$/i.test(u.hostname)) return true;
+            return false;
+        } catch (_) { return false; }
+    }
+
+    // 是否为豆瓣图片域名（请求时需加 Referer 降低 418）
+    function isDoubanImageUrl(targetUrl) {
+        try {
+            const host = new URL(targetUrl).hostname;
+            return /\.doubanio\.com$/i.test(host) || /^img\d*\.douban\.com$/i.test(host);
+        } catch (_) { return false; }
+    }
+
+    // 获取远程内容及其类型（文本，用于 M3U8 等）
+    async function fetchContentWithType(targetUrl) {
+        const headers = buildUpstreamHeaders(targetUrl);
+        try {
+            logDebug(`开始直接请求(文本): ${targetUrl}`);
             const response = await fetch(targetUrl, { headers, redirect: 'follow' });
-
             if (!response.ok) {
-                 const errorBody = await response.text().catch(() => '');
-                 logDebug(`请求失败: ${response.status} ${response.statusText} - ${targetUrl}`);
-                 throw new Error(`HTTP error ${response.status}: ${response.statusText}. URL: ${targetUrl}. Body: ${errorBody.substring(0, 150)}`);
+                const errorBody = await response.text().catch(() => '');
+                logDebug(`请求失败: ${response.status} ${response.statusText} - ${targetUrl}`);
+                throw new Error(`HTTP error ${response.status}: ${response.statusText}. URL: ${targetUrl}. Body: ${errorBody.substring(0, 150)}`);
             }
-
-            // 读取响应内容为文本
             const content = await response.text();
             const contentType = response.headers.get('Content-Type') || '';
             logDebug(`请求成功: ${targetUrl}, Content-Type: ${contentType}, 内容长度: ${content.length}`);
-            return { content, contentType, responseHeaders: response.headers }; // 同时返回原始响应头
-
+            return { content, contentType, responseHeaders: response.headers };
         } catch (error) {
-             logDebug(`请求彻底失败: ${targetUrl}: ${error.message}`);
-            // 抛出更详细的错误
+            logDebug(`请求彻底失败: ${targetUrl}: ${error.message}`);
+            throw new Error(`请求目标URL失败 ${targetUrl}: ${error.message}`);
+        }
+    }
+
+    // 构建上游请求头（豆瓣图片使用 movie.douban.com Referer 以降低 418）
+    function buildUpstreamHeaders(targetUrl) {
+        const isDouban = isDoubanImageUrl(targetUrl);
+        const headers = new Headers({
+            'User-Agent': getRandomUserAgent(),
+            'Accept': isDouban ? 'image/webp,image/apng,image/*,*/*;q=0.8' : '*/*',
+            'Accept-Language': request.headers.get('Accept-Language') || 'zh-CN,zh;q=0.9,en;q=0.8',
+            'Referer': isDouban ? 'https://movie.douban.com/' : (request.headers.get('Referer') || new URL(targetUrl).origin)
+        });
+        return headers;
+    }
+
+    // 获取远程二进制内容（图片等），避免用 text() 损坏数据
+    async function fetchBinaryContent(targetUrl) {
+        const headers = buildUpstreamHeaders(targetUrl);
+        try {
+            logDebug(`开始直接请求(二进制): ${targetUrl}`);
+            const response = await fetch(targetUrl, { headers, redirect: 'follow' });
+            if (!response.ok) {
+                const errorBody = await response.text().catch(() => '');
+                logDebug(`请求失败: ${response.status} ${response.statusText} - ${targetUrl}`);
+                throw new Error(`HTTP error ${response.status}: ${response.statusText}. URL: ${targetUrl}. Body: ${errorBody.substring(0, 150)}`);
+            }
+            const arrayBuffer = await response.arrayBuffer();
+            const contentType = response.headers.get('Content-Type') || 'image/jpeg';
+            logDebug(`请求成功(二进制): ${targetUrl}, Content-Type: ${contentType}, 长度: ${arrayBuffer.byteLength}`);
+            return { body: arrayBuffer, contentType, responseHeaders: response.headers };
+        } catch (error) {
+            logDebug(`请求彻底失败(二进制): ${targetUrl}: ${error.message}`);
             throw new Error(`请求目标URL失败 ${targetUrl}: ${error.message}`);
         }
     }
@@ -508,6 +544,23 @@ export async function onRequest(context) {
         }
 
         logDebug(`收到代理请求: ${targetUrl}`);
+
+        // --- 图片请求：二进制获取并直接返回，对豆瓣加 Referer 降低 418 ---
+        if (isImageRequest(targetUrl)) {
+            try {
+                const { body, contentType, responseHeaders } = await fetchBinaryContent(targetUrl);
+                const finalHeaders = new Headers(responseHeaders);
+                finalHeaders.set('Content-Type', contentType || 'image/jpeg');
+                finalHeaders.set('Cache-Control', `public, max-age=${CACHE_TTL}`);
+                finalHeaders.set("Access-Control-Allow-Origin", "*");
+                finalHeaders.set("Access-Control-Allow-Methods", "GET, HEAD, POST, OPTIONS");
+                finalHeaders.set("Access-Control-Allow-Headers", "*");
+                return createResponse(body, 200, finalHeaders);
+            } catch (imgErr) {
+                logDebug(`图片代理失败: ${targetUrl}: ${imgErr.message}`);
+                return createResponse(`图片加载失败: ${imgErr.message}`, 500);
+            }
+        }
 
         // --- 缓存检查 (KV) ---
         const cacheKey = `proxy_raw:${targetUrl}`; // 使用原始内容的缓存键

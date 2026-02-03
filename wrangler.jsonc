@@ -3,10 +3,7 @@
   "compatibility_date": "2026-02-03",
   "main": "worker.js",
   "vars": {
-    "DEBUG": "false",
-    "CORS_ORIGIN": "*",
-    "REQUEST_TIMEOUT": "5000",
-    "CACHE_MAX_AGE": "1d"
+    "PASSWORD": "333"
   },
   "assets": {
     "directory": ".",

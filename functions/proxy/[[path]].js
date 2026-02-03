@@ -77,7 +77,17 @@ export async function onRequest(context) {
         const url = new URL(request.url);
         const authHash = url.searchParams.get('auth');
         const timestamp = url.searchParams.get('t');
-        
+
+        // 与 server.mjs 一致：无鉴权时，若请求的是图片等静态资源则放行（用于豆瓣封面等 img 请求）
+        let targetUrl = '';
+        try {
+            const encodedUrl = url.pathname.replace(/^\/proxy\//, '');
+            if (encodedUrl) targetUrl = decodeURIComponent(encodedUrl);
+        } catch (_) {}
+        if (!authHash && targetUrl && /\.(jpg|jpeg|png|gif|webp|bmp|svg|ico)(\?|$)/i.test(targetUrl)) {
+            return true;
+        }
+
         // 获取服务器端密码
         const serverPassword = env.PASSWORD;
         if (!serverPassword) {

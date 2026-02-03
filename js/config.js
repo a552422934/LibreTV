@@ -22,31 +22,16 @@ const SITE_CONFIG = {
 
 // API站点配置
 const API_SITES = {
-  dyttzy: {
-    api: "http://caiji.dy111ttzyapi.com/api.php/provide/vod",
-    name: "电影天堂资源",
-    detail: "http://caiji.dyttzyapi.com",
-  },
+  // https://telegra.ph/APIs-08-12
 
-  ruyi: {
-    api: "https://cj.rycj111api.com/api.php/provide/vod",
-    name: "如意资源",
+  dbzy: {
+    api: "https://dbzy.tv/api.php/provide/vod",
+    name: "豆瓣资源",
   },
 
   bfzy: {
     api: "https://bfzyapi.com/api.php/provide/vod",
     name: "暴风资源",
-  },
-
-  tyyszy: {
-    api: "https://tyyszy.com/api.php/provide/vod",
-    name: "天涯资源",
-  },
-
-  ffzy: {
-    api: "http://ffzy5.tv/api.php/provide/vod",
-    name: "非凡影视",
-    detail: "http://ffzy5.tv",
   },
 
   zy360: {
@@ -63,11 +48,6 @@ const API_SITES = {
     api: "https://jszyapi.com/api.php/provide/vod",
     name: "极速资源",
     detail: "https://jszyapi.com",
-  },
-
-  dbzy: {
-    api: "https://dbzy.tv/api.php/provide/vod",
-    name: "豆瓣资源",
   },
 
   mdzy: {
@@ -120,7 +100,27 @@ const API_SITES = {
     api: "https://api.ukuapi88.com/api.php/provide/vod",
     name: "U酷资源",
   },
-  //ARCHIVE https://telegra.ph/APIs-08-12
+  dyttzy: {
+    api: "http://caiji.dy111ttzyapi.com/api.php/provide/vod",
+    name: "电影天堂",
+    detail: "http://caiji.dyttzyapi.com",
+  },
+
+  ruyi: {
+    api: "https://cj.rycj111api.com/api.php/provide/vod",
+    name: "如意资源",
+  },
+
+  tyyszy: {
+    api: "https://tyyszy.com/api.php/provide/vod",
+    name: "天涯资源",
+  },
+
+  ffzy: {
+    api: "http://ffzy5.tv/api.php/provide/vod",
+    name: "非凡影视",
+    detail: "http://ffzy5.tv",
+  },
 };
 
 // 定义合并方法
@@ -131,6 +131,10 @@ function extendAPISites(newSites) {
 // 暴露到全局
 window.API_SITES = API_SITES;
 window.extendAPISites = extendAPISites;
+// window.DEFAULT_SELECTED_APIS = DEFAULT_SELECTED_APIS;
+
+// // 默认选中的搜索源（首次加载或未保存过选择时使用，键名需与 API_SITES 一致）
+// const DEFAULT_SELECTED_APIS = ["dbzy", "bfzy", "ruyi"];
 
 // 添加聚合搜索的配置选项
 const AGGREGATED_SEARCH_CONFIG = {

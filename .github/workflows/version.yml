@@ -1,5 +1,8 @@
 name: Bump version
 
+permissions:
+  contents: write
+
 on:
   push:
     branches:
@@ -15,6 +18,8 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.VERSION_PUSH_TOKEN }}
     - name: Bump version and commit changes
       run: |
         CURRENT_TIME=$(date +"%Y-%m-%d %H:%M")

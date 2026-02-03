@@ -2,9 +2,15 @@
   "name": "libretv",
   "compatibility_date": "2026-02-03",
   "main": "worker.js",
-  // 将项目根目录作为静态资源目录部署（index.html、css、js、image 等）
+  "vars": {
+    "DEBUG": "false",
+    "CORS_ORIGIN": "*",
+    "REQUEST_TIMEOUT": "5000",
+    "CACHE_MAX_AGE": "1d"
+  },
   "assets": {
     "directory": ".",
-    "binding": "ASSETS"
+    "binding": "ASSETS",
+    "run_worker_first": true
   }
 }

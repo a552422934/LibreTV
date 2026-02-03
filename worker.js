@@ -4,6 +4,12 @@
  */
 export default {
   async fetch(request, env, _ctx) {
+    if (!env.ASSETS || typeof env.ASSETS.fetch !== "function") {
+      return new Response(
+        "ASSETS binding not available. Ensure wrangler.jsonc has assets.binding and run_worker_first.",
+        { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } }
+      );
+    }
     return env.ASSETS.fetch(request);
   },
 };

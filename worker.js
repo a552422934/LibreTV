@@ -4,9 +4,9 @@
  */
 const HTML_PATHS = ["/", "/index.html", "/player.html"];
 
-function isHtmlRequest(url) {
-  const path = new URL(url).pathname;
-  return HTML_PATHS.some((p) => p === path || (p === "/" && path === "/"));
+function isHtmlRequest(pathname) {
+  const p = pathname === "/" ? pathname : pathname.replace(/\/$/, "");
+  return HTML_PATHS.some((h) => h === p || (h === "/" && p === ""));
 }
 
 async function sha256Hex(text) {
@@ -25,23 +25,35 @@ export default {
       );
     }
 
-    const response = await env.ASSETS.fetch(request);
+    const url = new URL(request.url);
+    const pathname = url.pathname || "/";
 
-    if (!isHtmlRequest(request.url)) return response;
+    // 根路径显式请求 index.html，确保拿到可注入的 HTML
+    let assetRequest = request;
+    if (pathname === "/" || pathname === "") {
+      assetRequest = new Request(new URL("/index.html", url.origin), request);
+    }
+
+    const response = await env.ASSETS.fetch(assetRequest);
+
+    if (!isHtmlRequest(pathname)) return response;
+    if (!response.ok) return response;
 
     const contentType = response.headers.get("Content-Type") || "";
-    if (!contentType.includes("text/html")) return response;
+    if (!contentType.toLowerCase().includes("text/html")) return response;
 
     let html = await response.text();
     const password = env.PASSWORD != null ? String(env.PASSWORD) : "";
-    const replacement =
-      password !== "" ? await sha256Hex(password) : "";
+    const replacement = password !== "" ? await sha256Hex(password) : "";
     html = html.replace(/\{\{PASSWORD\}\}/g, replacement);
+
+    const headers = new Headers(response.headers);
+    headers.set("Cache-Control", "private, no-store, max-age=0");
 
     return new Response(html, {
       status: response.status,
       statusText: response.statusText,
-      headers: response.headers,
+      headers,
     });
   },
 };
